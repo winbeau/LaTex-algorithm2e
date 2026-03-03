@@ -1,0 +1,15 @@
+\begin{algorithm}[H]
+\caption{Procedure Style: Normalize}
+\SetKwProg{Proc}{Procedure}{}{}
+\Proc{\textup{\textsc{Normalize}}$(v[1..d])$}{
+  $s \gets 0$\;
+  \For{$i \gets 1$ \KwTo $d$}{
+    $s \gets s + v_i^2$\;
+  }
+  $z \gets \sqrt{s + 10^{-12}}$\;
+  \For{$i \gets 1$ \KwTo $d$}{
+    $v_i \gets v_i / z$\;
+  }
+  \KwRet $v$\;
+}
+\end{algorithm}

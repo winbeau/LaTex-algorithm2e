@@ -1,0 +1,15 @@
+\begin{algorithm}[H]
+\caption{Gradient Descent Update}
+\KwInput{Objective $f(\theta)$, step size $\eta$, max iterations $T$}
+\KwInit{Initial parameter $\theta_0$}
+\KwOutput{Optimized parameter}
+\For{$t \gets 0$ \KwTo $T-1$}{
+  $g_t \gets \nabla_\theta f(\theta_t)$\;
+  $\theta_{t+1} \gets \theta_t - \eta g_t$\;
+  \If{$\|g_t\|_2 < 10^{-6}$}{
+    \KwRet $\theta_{t+1}$\;
+  }
+}
+\KwRet $\theta_T$\;
+\Complexity{$\Oh(T \cdot C_f)$, where $C_f$ is gradient cost}
+\end{algorithm}

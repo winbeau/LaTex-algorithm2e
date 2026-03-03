@@ -1,0 +1,14 @@
+\begin{algorithm}[t]
+\caption{Two-Column Friendly Pattern}
+\KwInput{Mini-batch $\mathcal{B}$, model $M$}
+\KwOutput{Updated model $M$}
+$\ell \gets 0$\;
+\ForEach{$(x,y) \in \mathcal{B}$}{
+  $\hat{y} \gets M(x)$\;
+  $\ell \gets \ell + \mathrm{CE}(\hat{y},y)$\;
+}
+$\ell \gets \ell / |\mathcal{B}|$\;
+\Comment*[r]{keep one operation per line in narrow columns}
+$M \gets \mathrm{Update}(M,\nabla \ell)$\;
+\KwRet $M$\;
+\end{algorithm}

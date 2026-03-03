@@ -1,0 +1,21 @@
+\begin{algorithm}[H]
+\caption{BFS With Line Numbers and Comments}
+\KwInput{Graph $G=(V,E)$, source node $s$}
+\KwOutput{Distance map $dist$ from $s$}
+\ForEach{$v \in V$}{
+  $dist[v] \gets +\infty$\tcp*[r]{mark as unvisited}
+}
+$dist[s] \gets 0$\;
+$Q \gets [s]$\tcp*[r]{FIFO queue}
+\While{$Q$ is not empty}{
+  $u \gets \mathrm{pop\_front}(Q)$\;
+  \ForEach{$(u,v) \in E$}{
+    \If{$dist[v] = +\infty$}{
+      $dist[v] \gets dist[u] + 1$\;
+      $Q \gets Q \cup [v]$\;
+      \tcp{first visit of $v$ gives shortest path in unweighted graph}
+    }
+  }
+}
+\KwRet $dist$\;
+\end{algorithm}

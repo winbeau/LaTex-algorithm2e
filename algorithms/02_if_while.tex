@@ -1,0 +1,20 @@
+\begin{algorithm}[H]
+\caption{Binary Search}
+\KwInput{Sorted array $A[1..m]$, target value $x$}
+\KwOutput{Index of $x$ or $-1$}
+$l \gets 1$, $r \gets m$\;
+\While{$l \le r$}{
+  $mid \gets \lfloor (l+r)/2 \rfloor$\;
+  \eIf{$A[mid] = x$}{
+    \KwRet $mid$\;
+  }{
+    \eIf{$A[mid] < x$}{
+      $l \gets mid + 1$\;
+    }{
+      $r \gets mid - 1$\;
+    }
+  }
+}
+\KwRet $-1$\;
+\Complexity{$\Oh(\log m)$}
+\end{algorithm}
