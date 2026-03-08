@@ -1,18 +1,20 @@
 \begin{algorithm}[H]
-\caption{CyclicStrategy for Fluct (osc) Head}
-\KwInput{Period $T$ (default $6$), bucket capacity $C$, new frame $(t, K_t, V_t)$}
-\KwOutput{Anchors for query frame $t_q$ inside $(t_{\mathrm{sink}}, t_{\mathrm{recent}})$}
+\caption{CyclicStrategy \& Attention for Fluct (osc) Head}
+\KwInput{Period $T$, bucket capacity $C$, query time $t_q$, new frame $(t, K_t, V_t)$}
+\KwData{Sink state $S_{\mathrm{sink}}$, Recent state $S_{\mathrm{recent}}$}
 \KwInit{$T$ FIFO buckets: $\mathrm{bucket}[0],\dots,\mathrm{bucket}[T-1]$}
 \SetKwProg{Fn}{Function}{}{}
-\Fn{\textup{\textsc{Update}}$(t, K_t, V_t)$}{
+
+\Fn{\textup{UPDATE}$(t, K_t, V_t)$}{
   $\phi \gets t \bmod T$\;
   $\mathrm{push\_back}(\mathrm{bucket}[\phi], (t, K_t, V_t))$\;
   \If{$|\mathrm{bucket}[\phi]| > C$}{
     $\mathrm{pop\_front}(\mathrm{bucket}[\phi])$\;
   }
-  \Complexity{Update: $\Oh(1)$}
+  \tcp*[r]{Update: $\mathcal{O}(1)$}
 }
-\Fn{\textup{\textsc{Collect}}$(t_q, t_{\mathrm{sink}}, t_{\mathrm{recent}})$}{
+
+\Fn{\textup{COLLECT}$(t_q, t_{\mathrm{sink}}, t_{\mathrm{recent}})$}{
   $\phi_q \gets t_q \bmod T$\;
   $\mathcal{A} \gets [\ ]$\;
   \ForEach{$(t, K, V) \in \mathrm{bucket}[\phi_q]$}{
@@ -21,58 +23,49 @@
     }
   }
   \KwRet $\mathcal{A}$\;
-  \Complexity{Collect: worst-case $\Oh(C)$}
+  \tcp*[r]{Collect: worst-case $\mathcal{O}(C)$}
+}
+
+\Fn{\textup{COMPUTEATTENTION}$(Q_{t_q})$}{
+  $\mathcal{A}_{\mathrm{mid}} \gets \text{COLLECT}(t_q, t_{\mathrm{sink}}, t_{\mathrm{recent}})$\;
+  $KV_{\mathrm{total}} \gets \mathrm{Concat}(S_{\mathrm{sink}}, \mathcal{A}_{\mathrm{mid}}, S_{\mathrm{recent}})$\;
+  $KV_{\mathrm{flat}}, \mathrm{cu\_seqlens} \gets \mathrm{FlattenWithPrefixSum}(KV_{\mathrm{total}})$\;
+  \KwRet $\mathrm{VarLenFlashAttn}(Q_{t_q}, KV_{\mathrm{flat}}, \mathrm{cu\_seqlens})$\;
 }
 \end{algorithm}
 
 \begin{algorithm}[H]
-\caption{StrideStrategy for Compact (stable) Head}
-\KwInput{Stride $K$ (default $6$), capacity $M$ ($-1$ means unlimited), new frame $(t, K_t, V_t)$}
-\KwOutput{Anchors inside $(t_{\mathrm{sink}}, t_{\mathrm{recent}})$}
-\KwInit{Ordered map $\mathrm{store}: t \mapsto (K_t, V_t)$}
+\caption{StrideStrategy \& Attention for Stable (sta+) Head}
+\KwInput{Stride length $L$, queue capacity $C$, query time $t_q$, new frame $(t, K_t, V_t)$}
+\KwData{Sink state $S_{\mathrm{sink}}$, Recent state $S_{\mathrm{recent}}$}
+\KwInit{1 FIFO queue: $\mathrm{queue\_mid}$}
 \SetKwProg{Fn}{Function}{}{}
-\Fn{\textup{\textsc{Update}}$(t, K_t, V_t)$}{
-  \If{$t \bmod K \neq 0$}{
-    \KwRet\;
+
+\Fn{\textup{UPDATE}$(t, K_t, V_t)$}{
+  \If{$t \geq t_{\mathrm{sink}}$ \textup{\textbf{and}} $(t - t_{\mathrm{sink}}) \bmod L == 0$}{
+    $\mathrm{push\_back}(\mathrm{queue\_mid}, (t, K_t, V_t))$\;
+    \If{$|\mathrm{queue\_mid}| > C$}{
+      $\mathrm{pop\_front}(\mathrm{queue\_mid})$\;
+    }
   }
-  $\mathrm{store}[t] \gets (K_t, V_t)$\;
-  \If{$M \neq -1$ \textbf{and} $|\mathrm{store}| > M$}{
-    $t_{\min} \gets \arg\min\limits_{u \in \mathrm{keys}(\mathrm{store})} u$\;
-    $\mathrm{delete}(\mathrm{store}[t_{\min}])$\;
-  }
-  \Complexity{Update: $\Oh(1)$ amortized ($\Oh(\log n)$ with tree map)}
+  \tcp*[r]{Update: $\mathcal{O}(1)$}
 }
-\Fn{\textup{\textsc{Collect}}$(t_{\mathrm{sink}}, t_{\mathrm{recent}})$}{
+
+\Fn{\textup{COLLECT}$(t_{\mathrm{sink}}, t_{\mathrm{recent}})$}{
   $\mathcal{A} \gets [\ ]$\;
-  \ForEach{$t$ in ascending order of $\mathrm{keys}(\mathrm{store})$}{
+  \ForEach{$(t, K, V) \in \mathrm{queue\_mid}$}{
     \If{$t_{\mathrm{sink}} < t < t_{\mathrm{recent}}$}{
-      $\mathrm{push\_back}(\mathcal{A}, (t, \mathrm{store}[t].K, \mathrm{store}[t].V))$\;
+      $\mathrm{push\_back}(\mathcal{A}, (t, K, V))$\;
     }
   }
   \KwRet $\mathcal{A}$\;
-  \Complexity{Collect: $\Oh(\#\mathrm{selected})$}
+  \tcp*[r]{Collect: worst-case $\mathcal{O}(C)$}
+}
+
+\Fn{\textup{COMPUTEATTENTION}$(Q_{t_q})$}{
+  $\mathcal{A}_{\mathrm{mid}} \gets \text{COLLECT}(t_{\mathrm{sink}}, t_{\mathrm{recent}})$\;
+  $KV_{\mathrm{total}} \gets \mathrm{Concat}(S_{\mathrm{sink}}, \mathcal{A}_{\mathrm{mid}}, S_{\mathrm{recent}})$\;
+  $KV_{\mathrm{flat}}, \mathrm{cu\_seqlens} \gets \mathrm{FlattenWithPrefixSum}(KV_{\mathrm{total}})$\;
+  \KwRet $\mathrm{VarLenFlashAttn}(Q_{t_q}, KV_{\mathrm{flat}}, \mathrm{cu\_seqlens})$\;
 }
 \end{algorithm}
-
-\begin{table}[t]
-\centering
-\caption{Comparison of CyclicStrategy and StrideStrategy}
-\label{tab:cyclic-vs-stride}
-\begin{tabular}{|p{0.22\linewidth}|p{0.31\linewidth}|p{0.37\linewidth}|}
-\hline
-\textbf{Aspect} & \textbf{Cyclic} & \textbf{Stride} \\
-\hline
-Applicable head & Fluct (osc) & Compact (stable) \\
-\hline
-Storage condition & All frames are inserted into phase buckets & Only frames with $t \bmod K = 0$ are stored \\
-\hline
-Eviction granularity & FIFO within each phase bucket & Global oldest timestamp (FIFO over time) \\
-\hline
-Query selection & Only bucket with phase $t_q \bmod T$ & All anchors in middle window $(t_{\mathrm{sink}}, t_{\mathrm{recent}})$ \\
-\hline
-Retrieved anchors & $\leq C$ & $\leq M$ (or $\lfloor \Delta t / K \rfloor$ when unbounded) \\
-\hline
-Design motivation & Match 6-frame periodic oscillation of attention & Cover long temporal span using sparse stable anchors \\
-\hline
-\end{tabular}
-\end{table}
